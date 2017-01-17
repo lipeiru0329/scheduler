@@ -1,6 +1,6 @@
-#include <stc89c51.h>
+#include "stm32f10x.h"
 /****小小调度器开始**********************************************/
-#define MAXTASKS 3
+#define MAXTASKS 255
 volatile unsigned char timers[MAXTASKS];
 
 #define _SS static unsigned char _lc=0; switch(_lc){default:
@@ -32,32 +32,11 @@ __LINE__+((__LINE__%256)==0): 实现。
 #define SendSem(sem) do {sem=0;} while(0);
 /*****小小调度器结束**********************************************************************/
 /*****下面是示例程序**********************************************************************/
-sbit LED1 = P2^1;
-sbit LED2 = P2^2;
-sbit LED0 = P2^5;
-unsigned char task0(){
-    static unsigned char _lc=0;
-    switch(_lc)
-    {
-        default:
-            while(1){
-                do {
-                        _lc=(__LINE__%255)+1;
-                        return 50 ;
-                    }
-                while(0);
-                case (__LINE__%255)+1:;
-            LED0=!LED0;
-            };
-    };
-    _lc=0;
-    return 255;
-}
 
 unsigned char task1(){
     _SS
     while(1){
-        WaitX(100);     //wait 1s
+        WaitX(100);     //wait 20s
         //Function1
     }
     _EE
@@ -65,12 +44,34 @@ unsigned char task1(){
 unsigned char task2(){
     _SS
     while(1){
-        WaitX(100);     //wait 1s
+        WaitX(100);     //wait 20s
         //Function2
     }
     _EE
 }
 
+void TIM6_Init(void)  //    CPU:72MHz
+{
+    NVIC_InitTypeDef NVIC_InitStructure;
+    NVIC_InitStructure.NVIC_IRQChannel = TIM6_IRQn;
+    NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 1;
+    NVIC_InitStructure.NVIC_IRQChannelSubPriority = 0;
+    NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
+    NVIC_Init(&NVIC_InitStructure);
+
+    RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM6, ENABLE);
+    TIM6->PSC = 7200 - 1; // 分频之后的时钟频率为10KHz
+    TIM6->ARR = 2000 - 1; // 0.2s 定时频率
+    TIM6->CR1 = 0x0004 + 0x0001; // URS = 1 CEN = 1
+    TIM6->DIER = 0x0001; // 使能更新中断
+}
+void TIM6_IRQHandler(void)
+{
+    UpdateTimers();
+    TIM6->SR=0x0000;//清标志位
+}
+
+/*   For stc89c51
 void InitT0()
 {
     TMOD = 0x21;
@@ -84,26 +85,26 @@ void INTT0(void) interrupt 1 using 1
 {
     TL0=0Xff; //10ms 重装
     TH0=0XDB;//b7;
-    /*
-    TL0=0X3c; //100ms 重装     Detail: http://www.21ic.com/jichuzhishi/mcu/timer/2014-05-05/345616.html
-    TH0=0XB0;
-    */
+
+   // TL0=0X3c; //100ms 重装     Detail: http://www.21ic.com/jichuzhishi/mcu/timer/2014-05-05/345616.html
+   // TH0=0XB0;
+
     UpdateTimers();
-    RunTask(task0,0);//任务 0 具有精确按时获得执行的权限，要求：task0 每次执行消耗时间<0.5 个 ticket
 }
+*/
 
 void main()
 {
-    InitT0();
+    TIM6_Init();
+    //InitT0();
     InitTasks(); //初始化任务，实际上是给 timers 清零
     while(1){
-        // RunTask(task0,0);
         RunTaskA(task1,1);//任务 1 具有比任务 2 高的运行权限   没有WAITX(0)
         RunTaskA(task2,2);//任务 2 具有低的运行权限
     }
 }
 
-//定义： 收到task2(1s)的信号后， 走task1
+//定义： 收到task2(2s)的信号后， 走task1
 #define SEM unsigned int；信号量的类型是 int，可以定义 65536 个，是个全局变量。
 SEM sm1;
 void task1(){
@@ -111,13 +112,14 @@ void task1(){
     InitSem(sm1);
     while(1){
         WaiSem(sm1);
-        LED1=!LED1; }
+        //Function
+        }
     _EE
 }
 void task2(){
     _SS
     while(1){
-        WaitX(100);
+        WaitX(1);
         SendSem(sm1);
         }
     _EE
@@ -129,7 +131,7 @@ static int i;
     _SS
     for(i=0;i<11;i++){
         WaitX(10U);
-        LED2=!LED2;
+        //Function
     }
     _EE
 }
@@ -138,7 +140,7 @@ unsigned char task1(){
     _SS
     while(1){
         WaitX(100U);
-        LED0=!LED0;
+        //Function
         CallSub(task11);
     }
     _EE
